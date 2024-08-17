@@ -1,0 +1,151 @@
+---
+title: "Bootsrapping, PCA, then Random Forest with feature importance scores"
+author: "Joshua Edefo"
+date: "2024-08-17"
+email: "edefojoshua2000@yahoo.com"
+output: github_document
+---
+Libraries
+```{r a, message=FALSE}
+# Libraries
+library(readxl)
+library(boot)
+library(dplyr)
+library(usethis)
+```
+#Boostrapping
+
+```{r b}
+```
+
+Importing data
+
+```{r c}
+data <- read_excel("C:/Users/joe62/OneDrive - Aberystwyth University/Apps/Desktop/GP Prescribing/Wales/how to use data to provide insights.xlsx")
+head(data)
+str(data)
+
+```
+
+Bootstrappin of data
+
+```{r d}
+# Bootsrapping Demand
+demand <- data$demand
+mean_function <- function(demand, indices) {
+  demand <- demand[indices]
+  return(mean(demand))}
+R <- 2000
+bootstrap_results <- boot(demand, statistic = mean_function, R = R)
+bootstrap_results
+print(bootstrap_results)
+demandb <- bootstrap_results$t
+head (demandb) 
+
+# Bootsrapping Service
+service <- data$service
+mean_function2 <- function(service, indices) {
+  # indices is a vector of resampled indices
+  service <- service[indices]
+  return(mean(service))}
+R <- 2000
+bootstrap_results2 <- boot(service, statistic = mean_function, R = R)
+bootstrap_results2
+print(bootstrap_results2)
+serviceb <- bootstrap_results2$t
+head(serviceb)
+
+## Bootsrapping Proximity to the hospital
+proximi <- data$proximi
+mean_function3 <- function(proximi, indices) {
+  # indices is a vector of resampled indices
+  proximi <- proximi[indices]
+  return(mean(proximi))}
+R <- 2000
+bootstrap_results3 <- boot(proximi, statistic = mean_function, R = R)
+bootstrap_results3
+print(bootstrap_results3)
+proximib <- bootstrap_results2$t
+head(proximib)
+
+```
+
+Principal Component Analysis (PCA)
+
+```{r e}
+data_b <- data.frame(demandb, serviceb, proximib)
+library(ggplot2)
+# Extracting the target Serviceb
+data_b_w <-data_b[, -2]
+#Standardised the scale
+data_b_w_scaled <- scale(data_b_w)
+head(data_b_w_scaled)
+# Perform PCA
+pca_result <- prcomp(data_b_w_scaled, center = TRUE, scale. = TRUE)
+# Print summary of PCA results
+summary(pca_result)
+# Extract PCA scores
+pca_scores <- pca_result$x
+head(pca_scores)
+# Get the first 2 principal components
+pca_scores_first_2 <- pca_scores[, 1:2]
+
+# Replace column names with custom names
+colnames(pca_scores_first_2) <- c("demandb", "proxmib")
+head (pca_scores_first_2)
+
+# Combine PCA scores with the target variable
+data <- data.frame(pca_scores_first_2, serviceb = data_b$serviceb)
+head(data)
+
+
+```
+
+Random Forest
+
+```{r f}
+#Libraries for Random Forest
+library(randomForest)
+library(lime)
+library(MASS)
+library(caTools)
+library(ranger)
+split <- sample.split( data, SplitRatio= 0.7)
+train<- subset(data, split == "TRUE")
+test <- subset(data, split== "FALSE")
+
+rf_model <- ranger(serviceb ~ ., data = train, importance = "impurity", oob.error = TRUE)
+summary(rf_model)
+predictions <- predict(rf_model, data = test)$predictions
+head(predictions)
+# Calculate RMSE
+actual_values <- test$serviceb  # The actual target values in the test dataset
+rmse <- sqrt(mean((predictions - actual_values)^2))
+rmse
+# rmse = 0.0016
+# Compute R-squared
+rss <- sum((actual_values - predictions)^2)  # Residual Sum of Squares
+tss <- sum((actual_values - mean(actual_values))^2)  # Total Sum of Squares
+r_squared <- 1 - (rss / tss)
+r_squared
+# R square = 0.9943 (99.5%)
+# Check the OOB error (Out-of-Bag error)
+OOB_error <- rf_model$prediction.error
+OOB_error
+
+```
+
+Using Feature Importance socres to explain the contribution of each variable
+
+```{r ff}
+importance_scores <- importance(rf_model)
+importance_scores
+# similar feature importance score
+```
+
+session information
+
+```{r g}
+sessionInfo()
+
+```
